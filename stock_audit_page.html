@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Live Stock Audit</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{--bg:#f4f6f8;--card:#fff;--ink:#17202a;--mute:#6b7785;--line:#e3e8ee;--accent:#1f5eff;
+    --ok:#12805c;--okbg:#e3f6ee;--short:#c62828;--shortbg:#fdeaea;--extra:#b26a00;--extrabg:#fff3dc;--un:#5b3fc4;--unbg:#eee9ff}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--ink);font-size:14px}
+  header{background:#101828;color:#fff;padding:14px 20px;display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between}
+  header h1{font-size:18px;margin:0;font-weight:650}
+  .live{display:flex;align-items:center;gap:8px;font-size:12.5px;color:#c9d2de}
+  .dot{width:9px;height:9px;border-radius:50%;background:#35d08a;animation:pulse 1.6s infinite}
+  .dot.err{background:#ff6b6b;animation:none}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(53,208,138,.7)}100%{box-shadow:0 0 0 9px rgba(53,208,138,0)}}
+  button,select{font:inherit;cursor:pointer;border-radius:8px;border:1px solid var(--line);background:#fff;color:var(--ink);padding:8px 14px}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+  button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  .hctl{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .hctl label{font-size:12.5px;color:#c9d2de}
+  main{max-width:1400px;margin:0 auto;padding:18px}
+  .banner{background:#fff8e1;border:1px solid #f1d58a;color:#6b4e00;padding:10px 14px;border-radius:10px;margin-bottom:14px}
+  .banner.err{background:var(--shortbg);border-color:#f2b8b8;color:#8e1c1c}
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:14px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+  .card .n{font-size:24px;font-weight:700;font-variant-numeric:tabular-nums}
+  .card .l{color:var(--mute);font-size:12px;margin-top:2px}
+  .tools{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:12px}
+  .tools input{flex:1;min-width:200px;padding:9px 12px;border:1px solid var(--line);border-radius:8px;font:inherit}
+  .tabs{display:flex;flex-wrap:wrap;gap:6px}
+  .tabs button{padding:6px 12px;border-radius:999px;font-size:13px}
+  .tabs button.on{background:#101828;color:#fff;border-color:#101828}
+  .wrap{background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:auto;max-height:70vh}
+  table{width:100%;border-collapse:collapse;min-width:1100px}
+  th,td{padding:9px 12px;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap}
+  th{position:sticky;top:0;background:#f8fafc;font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--mute);z-index:1}
+  td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+  td.name{white-space:normal;min-width:220px}
+  td.note{white-space:normal;min-width:140px;color:#3c4654}
+  .pos{color:var(--extra);font-weight:650}.neg{color:var(--short);font-weight:650}
+  .tag{display:inline-block;padding:3px 9px;border-radius:999px;font-size:12px;font-weight:600}
+  .t-match{background:var(--okbg);color:var(--ok)}.t-short{background:var(--shortbg);color:var(--short)}
+  .t-extra{background:var(--extrabg);color:var(--extra)}.t-unlisted{background:var(--unbg);color:var(--un)}
+  .t-pending{background:#eef1f4;color:var(--mute)}
+  tr.flash td{animation:flash 2.5s ease-out}
+  @keyframes flash{0%{background:#fff2a8}100%{background:transparent}}
+  .empty{padding:24px;text-align:center;color:var(--mute)}
+  .hide{display:none}
+  @media (prefers-reduced-motion:reduce){.dot,tr.flash td{animation:none}}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Live Stock Audit</h1>
+    <div class="live"><span class="dot" id="dot"></span><span id="status">Connecting…</span></div>
+  </div>
+  <div class="hctl">
+    <label for="store">Store</label>
+    <select id="store"></select>
+    <button class="primary" id="btnXls">Download Excel</button>
+  </div>
+</header>
+
+<main>
+  <div class="banner hide" id="banner"></div>
+
+  <div class="cards">
+    <div class="card"><div class="n" id="cTotal">0</div><div class="l">Products in store</div></div>
+    <div class="card"><div class="n" id="cStock">0</div><div class="l">Stock qty</div></div>
+    <div class="card"><div class="n" id="cCount">0</div><div class="l">Counted qty</div></div>
+    <div class="card"><div class="n" style="color:var(--ok)" id="cMatch">0</div><div class="l">Matched</div></div>
+    <div class="card"><div class="n" style="color:var(--short)" id="cShort">0</div><div class="l">Short</div></div>
+    <div class="card"><div class="n" style="color:var(--extra)" id="cExtra">0</div><div class="l">Extra</div></div>
+    <div class="card"><div class="n" style="color:var(--mute)" id="cPend">0</div><div class="l">Not counted yet</div></div>
+    <div class="card"><div class="n" id="cVal">0</div><div class="l">Net difference value</div></div>
+  </div>
+
+  <div class="tools">
+    <input id="search" type="search" placeholder="Search barcode, product code or name…" aria-label="Search">
+    <div class="tabs" id="tabs">
+      <button data-f="all" class="on">All</button>
+      <button data-f="short">Short</button>
+      <button data-f="extra">Extra</button>
+      <button data-f="match">Matched</button>
+      <button data-f="pending">Not counted</button>
+      <button data-f="unlisted">Not in stock list</button>
+      <button data-f="noted">With notes</button>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <table>
+      <thead><tr>
+        <th>Barcode</th><th>Product code</th><th>Product name</th><th>Category</th>
+        <th class="num">Price</th><th class="num">Stock qty</th><th class="num">Counted qty</th>
+        <th class="num">Extra (+)</th><th class="num">Short (−)</th><th class="num">Diff value</th>
+        <th>Status</th><th>Notes</th>
+      </tr></thead>
+      <tbody id="tbody"></tbody>
+    </table>
+    <div class="empty hide" id="empty"></div>
+  </div>
+</main>
+
+<script>
+/* ================= CONFIG — edit only this block ================= */
+const CONFIG = {
+  STOCK_SHEET_URL: "https://docs.google.com/spreadsheets/d/1DBphSE7gD0TsoLqQEQqoZCiYOp-m7JgaiK8dqYiJX0E/edit?gid=0#gid=0",      // paste the stock sheet link between the quotes
+  AUDIT_SHEET_URL: "https://docs.google.com/spreadsheets/d/1kepaU4wf8Nu_gZh3hKSTVX8gIZC8F_WmpOXNim9pGW4/edit?gid=0#gid=0",      // paste the scan sheet link between the quotes
+  COMPARE_WITH: "total",    // "total" = Total Stock column, "available" = Available Stock column
+  DEFAULT_STORE: "",        // e.g. "INJ7" to open that store first (optional)
+  REFRESH_SECONDS: 5,       // how often the scan sheet is re-read
+  STOCK_REFRESH_SECONDS: 60 // how often the stock sheet is re-read
+};
+/* ================================================================= */
+
+const $ = id => document.getElementById(id);
+const MAX_ROWS = 500;
+let S = null, A = null, stockText = null, auditText = null, lastStockAt = 0;
+let rows = [], prev = null, changed = new Set(), filter = "all", busy = false, demoTick = 0;
+let store = new URLSearchParams(location.search).get("store") || CONFIG.DEFAULT_STORE;
+
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const num = v => { const n = parseFloat(String(v ?? "").replace(/,/g, "")); return isNaN(n) ? 0 : n; };
+const key = v => String(v ?? "").trim().replace(/\.0+$/, "").toUpperCase();
+const txt = v => String(v ?? "").trim();
+const inr = n => "₹" + Math.round(n).toLocaleString("en-IN");
+const hi = (h, ...res) => { for (const re of res) { const i = h.findIndex(x => re.test(txt(x))); if (i >= 0) return i; } return -1; };
+
+async function fetchText(url) {
+  const id = (url.match(/\/d\/([\w-]+)/) || [])[1];
+  if (!id) throw new Error("A sheet link inside this file is not a valid Google Sheet link.");
+  const gid = (url.match(/[#&?]gid=(\d+)/) || [])[1] || "0";
+  const base = "https://docs.google.com/spreadsheets/d/" + id;
+  for (const u of [base + "/export?format=csv&gid=" + gid, base + "/gviz/tq?tqx=out:csv&gid=" + gid]) {
+    try {
+      const r = await fetch(u, { cache: "no-store" });
+      if (!r.ok) continue;
+      const t = await r.text();
+      if (t.trim().startsWith("<")) continue; // login page = sheet is not shared
+      return t;
+    } catch (e) { /* try next */ }
+  }
+  throw new Error("Could not read the Google Sheet. Set sharing to \"Anyone with the link – Viewer\" on both sheets.");
+}
+const parse = t => Papa.parse(t, { skipEmptyLines: true }).data;
+
+function parseStock(d) {
+  const h = d[0] || [];
+  const c = {
+    date: hi(h, /^date$/i), store: hi(h, /^store\s*code$/i, /store/i), sname: hi(h, /^store\s*name$/i),
+    pcode: hi(h, /^product\s*code$/i, /sku|item\s*code/i), name: hi(h, /^product\s*name$/i, /name|desc/i),
+    bc: hi(h, /barcode|ean/i), cat: hi(h, /^category/i), sub: hi(h, /sub/i), price: hi(h, /^price$/i, /price|mrp/i),
+    qty: /^avail/i.test(CONFIG.COMPARE_WITH) ? hi(h, /^avail/i, /^total\s*stock/i) : hi(h, /^total\s*stock/i, /qty|stock/i)
+  };
+  const g = (r, i) => i >= 0 ? txt(r[i]) : "";
+  const items = [], stores = new Map(), global = new Map();
+  for (let i = 1; i < d.length; i++) {
+    const r = d[i];
+    const it = { date: g(r, c.date), store: key(g(r, c.store)), sname: g(r, c.sname), pcode: g(r, c.pcode), name: g(r, c.name),
+      bc: g(r, c.bc), cat: g(r, c.cat), sub: g(r, c.sub), price: num(g(r, c.price)), qty: num(g(r, c.qty)) };
+    if (!it.pcode && !it.bc) continue;
+    items.push(it);
+    if (!stores.has(it.store)) stores.set(it.store, it.sname);
+    if (it.bc) global.set(key(it.bc), it);
+    if (it.pcode) global.set(key(it.pcode), it);
+  }
+  return { items, stores, global };
+}
+
+function parseAudit(d) {
+  const h = d[0] || [];
+  const s = hi(h, /store/i);
+  let c = h.findIndex((x, i) => i !== s && /code|barcode|ean|sku/i.test(txt(x))); if (c < 0) c = 0;
+  return { d, c, s, q: hi(h, /qty|quantity/i), n: hi(h, /note|remark|comment|damage/i) };
+}
+
+function fillStores() {
+  const el = $("store"), list = [...S.stores.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  if (!S.stores.has(key(store))) store = list.length ? list[0][0] : "";
+  store = key(store);
+  el.innerHTML = list.map(([c, n]) => `<option value="${esc(c)}">${esc(c)}${n ? " — " + esc(n) : ""}</option>`).join("");
+  el.value = store;
+}
+
+function compute() {
+  let its = S.items.filter(i => i.store === store);
+  const ds = its.map(i => Date.parse(i.date));
+  if (ds.length && ds.every(x => !isNaN(x))) { // if several dates exist, use only the latest stock date
+    const mx = ds.reduce((a, b) => Math.max(a, b), 0);
+    its = its.filter((_, j) => ds[j] === mx);
+  }
+  const list = [], byPC = new Map(), byBC = new Map();
+  its.forEach(i => {
+    const k = key(i.pcode) || key(i.bc);
+    let o = byPC.get(k);
+    if (!o) {
+      o = { store, sname: i.sname, bc: i.bc, pcode: i.pcode, name: i.name, cat: i.cat, sub: i.sub, price: i.price,
+        stock: 0, counted: 0, notes: [], listed: true, scanned: false, last: -1 };
+      byPC.set(k, o); list.push(o);
+    }
+    o.stock += i.qty;
+  });
+  const sn = S.stores.get(store) || "";
+  A.d.forEach((r, idx) => {
+    if (idx === 0) return;
+    const k = key(r[A.c]); if (!k) return;
+    if (A.s >= 0 && key(r[A.s]) && key(r[A.s]) !== store) return; // optional Store Code column in scan sheet
+    let o = byBC.get(k) || byPC.get(k);
+    if (!o) {
+      const g = S.global.get(k) || {};
+      o = { store, sname: sn, bc: g.bc || "", pcode: txt(r[A.c]), name: g.name || "", cat: g.cat || "", sub: g.sub || "",
+        price: g.price || 0, stock: 0, counted: 0, notes: [], listed: false, scanned: false, last: -1 };
+      byBC.set(k, o); list.push(o);
+    }
+    o.counted += (A.q >= 0 && txt(r[A.q]) !== "") ? num(r[A.q]) : 1; // blank qty = 1 piece
+    o.scanned = true; o.last = idx;
+    const note = A.n >= 0 ? txt(r[A.n]) : "";
+    if (note && !o.notes.includes(note)) o.notes.push(note);
+  });
+  list.forEach(o => {
+    const d = o.counted - o.stock;
+    o.diff = d; o.extra = d > 0 ? d : 0; o.short = d < 0 ? d : 0; o.val = d * o.price;
+    o.id = key(o.pcode) || key(o.bc);
+    o.status = !o.listed ? "unlisted" : !o.scanned ? "pending" : d === 0 ? "match" : d < 0 ? "short" : "extra";
+  });
+  rows = list.sort((a, b) => b.last - a.last); // latest scan on top, uncounted products below
+  const now = new Map(rows.map(r => [r.id, r.counted + "|" + r.notes.join(";")]));
+  changed = new Set();
+  if (prev) now.forEach((v, k) => { if (prev.get(k) !== v) changed.add(k); });
+  prev = now;
+}
+
+const LABEL = { match: "Matched", short: "Short", extra: "Extra", pending: "Not counted", unlisted: "Not in stock list" };
+
+function render() {
+  const q = key($("search").value);
+  const view = rows.filter(r =>
+    (filter === "all" || (filter === "noted" ? r.notes.length : r.status === filter)) &&
+    (!q || key(r.bc).includes(q) || key(r.pcode).includes(q) || key(r.name).includes(q)));
+  $("tbody").innerHTML = view.slice(0, MAX_ROWS).map(r => `<tr class="${changed.has(r.id) ? "flash" : ""}">
+    <td><strong>${esc(r.bc) || "—"}</strong></td><td>${esc(r.pcode) || "—"}</td><td class="name">${esc(r.name) || "—"}</td><td>${esc(r.cat)}</td>
+    <td class="num">${r.price || ""}</td><td class="num">${r.stock}</td><td class="num">${r.counted}</td>
+    <td class="num ${r.extra ? "pos" : ""}">${r.extra ? "+" + r.extra : "0"}</td>
+    <td class="num ${r.short ? "neg" : ""}">${r.short || "0"}</td>
+    <td class="num ${r.val > 0 ? "pos" : r.val < 0 ? "neg" : ""}">${r.val ? (r.val > 0 ? "+" : "−") + inr(Math.abs(r.val)) : "0"}</td>
+    <td><span class="tag t-${r.status}">${LABEL[r.status]}</span></td>
+    <td class="note">${esc(r.notes.join("; "))}</td></tr>`).join("");
+  const e = $("empty");
+  e.classList.toggle("hide", view.length > 0 && view.length <= MAX_ROWS);
+  e.textContent = !view.length ? "No products match this view."
+    : `Showing the first ${MAX_ROWS} of ${view.length} products. Use search or the filters to narrow down. The Excel download always contains everything.`;
+  const cnt = s => rows.filter(r => r.status === s).length;
+  const net = rows.reduce((a, r) => a + r.val, 0);
+  $("cTotal").textContent = rows.filter(r => r.listed).length;
+  $("cStock").textContent = rows.reduce((a, r) => a + r.stock, 0);
+  $("cCount").textContent = rows.reduce((a, r) => a + r.counted, 0);
+  $("cMatch").textContent = cnt("match"); $("cShort").textContent = cnt("short");
+  $("cExtra").textContent = cnt("extra") + cnt("unlisted"); $("cPend").textContent = cnt("pending");
+  $("cVal").textContent = (net < 0 ? "−" : net > 0 ? "+" : "") + inr(Math.abs(net));
+  $("cVal").style.color = net < 0 ? "var(--short)" : net > 0 ? "var(--extra)" : "";
+}
+
+function demo() {
+  const H = "Date,Store Code,Store Name,Product Code,Product Name,Barcode,Category Name,Sub-Class Name,Price,Total Stock,Available Stock,Stock AMT\n";
+  const st = H + [
+    "2026-09-27,INJ7,Surat Adajan,2019889910100,Miniso Bowknot Queen Eyeshadow,4894916013881,Cosmetics,Eyeshadow Liquid,300,8,8,2400",
+    "2026-09-27,INJ7,Surat Adajan,2028704210103,Basic Series Pencil Sharpener,6942554576461,Stationery & Gift,Stationery,60,3,3,180",
+    "2026-09-27,INJ7,Surat Adajan,2035578210108,Miniso Scarf Bunny Plush Toy 35CM,4894916070006,Plush Toy,Regular Plush,500,6,0,3000",
+    "2026-09-27,INJ7,Surat Adajan,2024480713128,Miniso Women's Fashion Clog,4894916047374,Apparel & Accessories,Fashionable Slippers,560,4,4,2240",
+    "2026-09-27,INI8,BHOPAL,2021143211106,Miniso Friction Plane (Blue),4894916014697,Toy Series,Plastic Vehicles,210,6,0,1260",
+    "2026-09-27,INI8,BHOPAL,2033103210104,The Powerpuff Girls Keychains,6942764406855,Plush Toy,Fashionable Keychains,550,3,3,1650"].join("\n");
+  const scans = ["2019889910100,8,", "2028704210103,1,", "2035578210108,1,", "2028704210103,1,", "2035578210108,1,",
+    "2024480713128,5,1 pc damaged", "2021143211106,6,", "2099999999999,1,Not on stock list", "2033103210104,2,"];
+  return [st, "Product Code,Scan Qty,Note\n" + scans.slice(0, 2 + (demoTick++ % (scans.length - 1))).join("\n")];
+}
+
+async function refresh() {
+  if (busy) return; busy = true;
+  try {
+    const isDemo = !CONFIG.STOCK_SHEET_URL.trim() || !CONFIG.AUDIT_SHEET_URL.trim();
+    let st = stockText, au;
+    const needStock = !S || Date.now() - lastStockAt > CONFIG.STOCK_REFRESH_SECONDS * 1000;
+    if (isDemo) [st, au] = demo();
+    else [st, au] = await Promise.all([needStock ? fetchText(CONFIG.STOCK_SHEET_URL) : stockText, fetchText(CONFIG.AUDIT_SHEET_URL)]);
+    if (needStock) lastStockAt = Date.now();
+    let dirty = false;
+    if (st !== stockText) { stockText = st; S = parseStock(parse(st)); fillStores(); dirty = true; }
+    if (au !== auditText) { auditText = au; A = parseAudit(parse(au)); dirty = true; }
+    if (dirty) { compute(); render(); }
+    $("dot").classList.remove("err");
+    $("status").textContent = (isDemo ? "Demo data" : "Live") + " · checked " + new Date().toLocaleTimeString();
+    const b = $("banner"); b.classList.toggle("hide", !isDemo); b.classList.remove("err");
+    if (isDemo) b.textContent = "Showing demo data. The Google Sheet links have not been added to this file yet.";
+  } catch (e) {
+    $("dot").classList.add("err"); $("status").textContent = "Connection problem · retrying";
+    const b = $("banner"); b.textContent = e.message; b.classList.add("err"); b.classList.remove("hide");
+  }
+  busy = false;
+}
+
+function downloadExcel() {
+  const head = ["Store Code", "Store Name", "Barcode", "Product Code", "Product Name", "Category", "Sub-Class", "Price",
+    "Stock Qty", "Counted Qty", "Extra (+)", "Short (-)", "Difference", "Difference Value", "Status", "Notes"];
+  const data = rows.map(r => [r.store, r.sname, r.bc, r.pcode, r.name, r.cat, r.sub, r.price, r.stock, r.counted,
+    r.extra, r.short, r.diff, r.val, LABEL[r.status], r.notes.join("; ")]);
+  const ws = XLSX.utils.aoa_to_sheet([head, ...data]);
+  ws["!cols"] = [10, 18, 16, 16, 44, 20, 22, 8, 10, 12, 10, 10, 11, 15, 18, 36].map(w => ({ wch: w }));
+  const cnt = s => rows.filter(r => r.status === s).length;
+  const sum = XLSX.utils.aoa_to_sheet([
+    ["Stock Audit Summary"], ["Store", store + " " + (S.stores.get(store) || "")], ["Generated", new Date().toLocaleString()], [],
+    ["Products in store", rows.filter(r => r.listed).length], ["Total stock qty", rows.reduce((a, r) => a + r.stock, 0)],
+    ["Total counted qty", rows.reduce((a, r) => a + r.counted, 0)],
+    ["Matched", cnt("match")], ["Short", cnt("short")], ["Extra", cnt("extra")],
+    ["Not counted", cnt("pending")], ["Not in stock list", cnt("unlisted")],
+    ["Net difference value", rows.reduce((a, r) => a + r.val, 0)]]);
+  sum["!cols"] = [{ wch: 22 }, { wch: 28 }];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Audit Report");
+  XLSX.utils.book_append_sheet(wb, sum, "Summary");
+  XLSX.writeFile(wb, "stock-audit-" + (store || "store") + "-" + new Date().toISOString().slice(0, 10) + ".xlsx");
+}
+
+$("btnXls").onclick = downloadExcel;
+$("store").onchange = e => { store = e.target.value; prev = null; if (S && A) { compute(); render(); } };
+$("search").oninput = () => { changed = new Set(); render(); };
+$("tabs").onclick = e => {
+  const b = e.target.closest("button"); if (!b) return;
+  filter = b.dataset.f; changed = new Set();
+  document.querySelectorAll("#tabs button").forEach(x => x.classList.toggle("on", x === b));
+  render();
+};
+refresh();
+setInterval(refresh, Math.max(3, CONFIG.REFRESH_SECONDS) * 1000);
+</script>
+</body>
+</html>
