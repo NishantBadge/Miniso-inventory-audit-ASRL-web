@@ -131,9 +131,9 @@
 <script>
 /* ================= CONFIG — edit only this block ================= */
 const CONFIG = {
-  STOCK_SHEET_URL: "https://docs.google.com/spreadsheets/d/1DBphSE7gD0TsoLqQEQqoZCiYOp-m7JgaiK8dqYiJX0E/edit?gid=0#gid=0",      // stock sheet link
-  SCAN_SHEET_URL: "https://docs.google.com/spreadsheets/d/1kepaU4wf8Nu_gZh3hKSTVX8gIZC8F_WmpOXNim9pGW4/edit?gid=0#gid=0",       // scan sheet link (Location / QTY)
-  GC_SHEET_URL: "https://docs.google.com/spreadsheets/d/1kepaU4wf8Nu_gZh3hKSTVX8gIZC8F_WmpOXNim9pGW4/edit?gid=755028042#gid=755028042",         // location count sheet link (Location / GC count)
+  STOCK_SHEET_URL: "https://docs.google.com/spreadsheets/d/1DBphSE7gD0TsoLqQEQqoZCiYOp-m7JgaiK8dqYiJX0E/edit?gid=0#gid=0",   // stock sheet link
+  SCAN_SHEET_URL: "https://docs.google.com/spreadsheets/d/1kepaU4wf8Nu_gZh3hKSTVX8gIZC8F_WmpOXNim9pGW4/edit?gid=0#gid=0",   // scan sheet link (Location / QTY)
+  GC_SHEET_URL: "https://docs.google.com/spreadsheets/d/1kepaU4wf8Nu_gZh3hKSTVX8gIZC8F_WmpOXNim9pGW4/edit?gid=755028042#gid=755028042",  // location count sheet link (Location / GC count)
   COMPARE_WITH: "total",    // "total" = Total Stock column, "available" = Available Stock column
   DEFAULT_STORE: "",        // e.g. "INJ7" to open that store first (optional)
   REFRESH_SECONDS: 5,       // how often the scan and GC sheets are re-read
@@ -195,13 +195,18 @@ function parseStock(d) {
 }
 function parseScan(d) {
   const h = d[0] || [];
-  let c = hi(h, /loc|barcode|code/i); if (c < 0) c = 0;
+  let c = hi(h, /loc/i, /barcode/i); if (c < 0) c = 0;
+  d.s = hi(h, /store/i); // optional Store Code column
+  const fs = d.s >= 0 ? key((d.find((r, i) => i > 0 && txt(r[d.s])) || [])[d.s]) : "";
+  if (fs && fs !== parseScan.last && S && S.stores.has(fs)) { store = fs; $("store").value = fs; prev = null; } // open on the store being scanned
+  parseScan.last = fs;
   let q = hi(h, /qty|quantity/i); if (q < 0) q = c === 0 ? 1 : 0;
   return { d, c, q, n: hi(h, /note|remark|comment|damage/i) };
 }
 function parseGC(d) {
   const h = d[0] || [];
   let c = hi(h, /loc/i); if (c < 0) c = 0;
+  d.s = hi(h, /store/i); // optional Store Code column
   let q = hi(h, /count|gc|qty/i); if (q < 0) q = c === 0 ? 1 : 0;
   return { d, c, q };
 }
@@ -244,6 +249,7 @@ function compute() {
   A.d.forEach((r, idx) => {
     if (idx === 0) return;
     const v = txt(r[A.c]); if (!v) return;
+    if (A.d.s >= 0 && key(r[A.d.s]) && key(r[A.d.s]) !== store) return; // row belongs to another store
     const qv = txt(r[A.q]);
     if (v.includes(".") || (qv === "" && !/^\d{8,}$/.test(v))) { cur = v; getLoc(cur).inScan = true; return; } // location row
     const k = key(v), qty = qv === "" ? 1 : num(qv);
@@ -256,6 +262,8 @@ function compute() {
     }
     o.counted += qty; o.scanned = true; o.last = idx; o.locs.add(cur);
     const note = A.n >= 0 ? txt(r[A.n]) : "";
+    if (/damage/i.test(note)) o.dmg = (o.dmg || 0) + qty;
+    if (/tester/i.test(note)) o.tst = (o.tst || 0) + qty;
     if (note && !o.notes.includes(note)) o.notes.push(note);
     const L = getLoc(cur); L.scanned += qty; L.codes.add(k); L.inScan = true;
   });
@@ -263,6 +271,7 @@ function compute() {
   G.d.forEach((r, idx) => {
     if (idx === 0) return;
     const v = txt(r[G.c]); if (!v) return;
+    if (G.d.s >= 0 && key(r[G.d.s]) && key(r[G.d.s]) !== store) return; // row belongs to another store
     const L = getLoc(v); L.gc = (L.gc || 0) + num(r[G.q]);
   });
   list.forEach(o => {
@@ -319,7 +328,9 @@ function sumText() {
   const sales = num(F("fSales")), cost = num(F("fCost"));
   const pct = (a, b) => b ? (a / b * 100).toFixed(1) + "%" : "";
   const acc = stockQ ? Math.max(0, (1 - absd / stockQ) * 100).toFixed(0) + "%" : "";
-  const v = id => F(id) ? nIN(num(F(id))) : "";
+  const tot = f => rows.reduce((a, r) => a + f(r), 0);
+  const auto = { fDmgQ: tot(r => r.dmg || 0), fDmgV: tot(r => (r.dmg || 0) * r.price), fTstQ: tot(r => r.tst || 0), fTstV: tot(r => (r.tst || 0) * r.price) };
+  const v = id => F(id) ? nIN(num(F(id))) : id in auto ? nIN(auto[id]) : "";
   return [
     "*Inventory Audit Report " + sname + (F("fCity") ? " " + F("fCity") : "") + "*", "",
     "Date : " + dLong(F("fDate")),
