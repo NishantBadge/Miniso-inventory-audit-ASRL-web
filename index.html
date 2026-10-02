@@ -25,6 +25,9 @@
   main{max-width:1400px;margin:0 auto;padding:18px}
   .banner{background:#fff8e1;border:1px solid #f1d58a;color:#6b4e00;padding:10px 14px;border-radius:10px;margin-bottom:14px}
   .banner.err{background:var(--shortbg);border-color:#f2b8b8;color:#8e1c1c}
+  .views{display:flex;gap:8px;margin-bottom:14px}
+  .views button{font-weight:600;padding:10px 18px}
+  .views button.on{background:#101828;color:#fff;border-color:#101828}
   .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:14px}
   .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
   .card .n{font-size:24px;font-weight:700;font-variant-numeric:tabular-nums}
@@ -35,12 +38,13 @@
   .tabs button{padding:6px 12px;border-radius:999px;font-size:13px}
   .tabs button.on{background:#101828;color:#fff;border-color:#101828}
   .wrap{background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:auto;max-height:70vh}
-  table{width:100%;border-collapse:collapse;min-width:1100px}
+  table{width:100%;border-collapse:collapse}
+  table.wide{min-width:1200px}
   th,td{padding:9px 12px;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap}
   th{position:sticky;top:0;background:#f8fafc;font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--mute);z-index:1}
   td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
   td.name{white-space:normal;min-width:220px}
-  td.note{white-space:normal;min-width:140px;color:#3c4654}
+  td.note{white-space:normal;min-width:130px;color:#3c4654}
   .pos{color:var(--extra);font-weight:650}.neg{color:var(--short);font-weight:650}
   .tag{display:inline-block;padding:3px 9px;border-radius:999px;font-size:12px;font-weight:600}
   .t-match{background:var(--okbg);color:var(--ok)}.t-short{background:var(--shortbg);color:var(--short)}
@@ -60,6 +64,11 @@
     <div class="live"><span class="dot" id="dot"></span><span id="status">Connecting…</span></div>
   </div>
   <div class="hctl">
+    <label id="basisLbl">Compare with</label>
+    <span id="basis" role="group" aria-labelledby="basisLbl" style="display:flex;gap:4px">
+      <button data-b="available">Available stock</button>
+      <button data-b="total">Total stock</button>
+    </span>
     <label for="store">Store</label>
     <select id="store"></select>
     <button class="primary" id="btnXls">Download Excel</button>
@@ -68,41 +77,53 @@
 
 <main>
   <div class="banner hide" id="banner"></div>
-
-  <div class="cards">
-    <div class="card"><div class="n" id="cTotal">0</div><div class="l">Products in store</div></div>
-    <div class="card"><div class="n" id="cStock">0</div><div class="l">Stock qty</div></div>
-    <div class="card"><div class="n" id="cCount">0</div><div class="l">Counted qty</div></div>
-    <div class="card"><div class="n" style="color:var(--ok)" id="cMatch">0</div><div class="l">Matched</div></div>
-    <div class="card"><div class="n" style="color:var(--short)" id="cShort">0</div><div class="l">Short</div></div>
-    <div class="card"><div class="n" style="color:var(--extra)" id="cExtra">0</div><div class="l">Extra</div></div>
-    <div class="card"><div class="n" style="color:var(--mute)" id="cPend">0</div><div class="l">Not counted yet</div></div>
-    <div class="card"><div class="n" id="cVal">0</div><div class="l">Net difference value</div></div>
+  <div class="views" id="views">
+    <button data-v="prod" class="on">Product-wise</button>
+    <button data-v="loc">Location-wise</button>
+    <button data-v="sum">Audit summary</button>
   </div>
-
-  <div class="tools">
-    <input id="search" type="search" placeholder="Search barcode, product code or name…" aria-label="Search">
-    <div class="tabs" id="tabs">
-      <button data-f="all" class="on">All</button>
-      <button data-f="short">Short</button>
-      <button data-f="extra">Extra</button>
-      <button data-f="match">Matched</button>
-      <button data-f="pending">Not counted</button>
-      <button data-f="unlisted">Not in stock list</button>
-      <button data-f="noted">With notes</button>
+  <div id="sumPanel" class="hide">
+    <style>
+      #sumPanel .box{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:14px}
+      #sumPanel .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px}
+      #sumPanel label{display:block;font-size:12px;color:var(--mute);margin-bottom:4px}
+      #sumPanel input{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:8px;font:inherit}
+      #sumOut{width:100%;height:560px;padding:14px;border:1px solid var(--line);border-radius:8px;font:13.5px/1.5 ui-monospace,Menlo,Consolas,monospace;resize:vertical}
+    </style>
+    <div class="box">
+      <strong>Details to fill in</strong>
+      <p style="color:var(--mute);margin:4px 0 12px">These are not in the sheets, so type them here. Everything else is calculated from the live audit.</p>
+      <div class="grid">
+        <div><label for="fDate">Report date</label><input id="fDate" type="date"></div>
+        <div><label for="fCity">City</label><input id="fCity"></div>
+        <div><label for="fSales">Sales amount during the period</label><input id="fSales" inputmode="decimal"></div>
+        <div><label for="fCost">Inventory loss amount, cost value</label><input id="fCost" inputmode="decimal"></div>
+        <div><label for="fLast">Last inventory date</label><input id="fLast" type="date"></div>
+        <div><label for="fCur">Current inventory date</label><input id="fCur" type="date"></div>
+        <div><label for="fDmgQ">Damage qty</label><input id="fDmgQ" inputmode="decimal"></div>
+        <div><label for="fDmgV">Damage value</label><input id="fDmgV" inputmode="decimal"></div>
+        <div><label for="fTstQ">Tester qty</label><input id="fTstQ" inputmode="decimal"></div>
+        <div><label for="fTstV">Tester value</label><input id="fTstV" inputmode="decimal"></div>
+        <div><label for="fCount">Inventory count personnel</label><input id="fCount"></div>
+        <div><label for="fInch">Store incharge person</label><input id="fInch"></div>
+        <div><label for="fAud">Inventory audit persons</label><input id="fAud"></div>
+      </div>
+    </div>
+    <div class="box">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:10px;flex-wrap:wrap">
+        <strong>Inventory audit report</strong>
+        <button class="primary" id="btnCopy">Copy report text</button>
+      </div>
+      <textarea id="sumOut" readonly aria-label="Inventory audit report text"></textarea>
     </div>
   </div>
-
+  <div class="cards" id="cards"></div>
+  <div class="tools">
+    <input id="search" type="search" placeholder="Search…" aria-label="Search">
+    <div class="tabs" id="tabs"></div>
+  </div>
   <div class="wrap">
-    <table>
-      <thead><tr>
-        <th>Barcode</th><th>Product code</th><th>Product name</th><th>Category</th>
-        <th class="num">Price</th><th class="num">Stock qty</th><th class="num">Counted qty</th>
-        <th class="num">Extra (+)</th><th class="num">Short (−)</th><th class="num">Diff value</th>
-        <th>Status</th><th>Notes</th>
-      </tr></thead>
-      <tbody id="tbody"></tbody>
-    </table>
+    <table id="table"><thead id="thead"></thead><tbody id="tbody"></tbody></table>
     <div class="empty hide" id="empty"></div>
   </div>
 </main>
@@ -110,25 +131,26 @@
 <script>
 /* ================= CONFIG — edit only this block ================= */
 const CONFIG = {
-  STOCK_SHEET_URL: "https://docs.google.com/spreadsheets/d/1DBphSE7gD0TsoLqQEQqoZCiYOp-m7JgaiK8dqYiJX0E/edit?gid=0#gid=0",      // paste the stock sheet link between the quotes
-  AUDIT_SHEET_URL: "https://docs.google.com/spreadsheets/d/1kepaU4wf8Nu_gZh3hKSTVX8gIZC8F_WmpOXNim9pGW4/edit?gid=0#gid=0",      // paste the scan sheet link between the quotes
+  STOCK_SHEET_URL: "https://docs.google.com/spreadsheets/d/1DBphSE7gD0TsoLqQEQqoZCiYOp-m7JgaiK8dqYiJX0E/edit?gid=0#gid=0",      // stock sheet link
+  SCAN_SHEET_URL: "https://docs.google.com/spreadsheets/d/1kepaU4wf8Nu_gZh3hKSTVX8gIZC8F_WmpOXNim9pGW4/edit?gid=0#gid=0",       // scan sheet link (Location / QTY)
+  GC_SHEET_URL: "https://docs.google.com/spreadsheets/d/1kepaU4wf8Nu_gZh3hKSTVX8gIZC8F_WmpOXNim9pGW4/edit?gid=755028042#gid=755028042",         // location count sheet link (Location / GC count)
   COMPARE_WITH: "total",    // "total" = Total Stock column, "available" = Available Stock column
   DEFAULT_STORE: "",        // e.g. "INJ7" to open that store first (optional)
-  REFRESH_SECONDS: 5,       // how often the scan sheet is re-read
+  REFRESH_SECONDS: 5,       // how often the scan and GC sheets are re-read
   STOCK_REFRESH_SECONDS: 60 // how often the stock sheet is re-read
 };
 /* ================================================================= */
 
 const $ = id => document.getElementById(id);
-const MAX_ROWS = 500;
-let S = null, A = null, stockText = null, auditText = null, lastStockAt = 0;
-let rows = [], prev = null, changed = new Set(), filter = "all", busy = false, demoTick = 0;
+const MAX_ROWS = 500, NO_LOC = "(no location)";
+let S = null, A = null, G = null, stockText = null, scanText = null, gcText = null, lastStockAt = 0;
+let rows = [], locs = [], prev = null, changed = new Set(), view = "prod", filter = "all", busy = false, demoTick = 0;
 let store = new URLSearchParams(location.search).get("store") || CONFIG.DEFAULT_STORE;
 
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const num = v => { const n = parseFloat(String(v ?? "").replace(/,/g, "")); return isNaN(n) ? 0 : n; };
-const key = v => String(v ?? "").trim().replace(/\.0+$/, "").toUpperCase();
 const txt = v => String(v ?? "").trim();
+const key = v => txt(v).replace(/\.0+$/, "").toUpperCase();
 const inr = n => "₹" + Math.round(n).toLocaleString("en-IN");
 const hi = (h, ...res) => { for (const re of res) { const i = h.findIndex(x => re.test(txt(x))); if (i >= 0) return i; } return -1; };
 
@@ -146,7 +168,7 @@ async function fetchText(url) {
       return t;
     } catch (e) { /* try next */ }
   }
-  throw new Error("Could not read the Google Sheet. Set sharing to \"Anyone with the link – Viewer\" on both sheets.");
+  throw new Error("Could not read a Google Sheet. Set sharing to \"Anyone with the link – Viewer\" on all sheets.");
 }
 const parse = t => Papa.parse(t, { skipEmptyLines: true }).data;
 
@@ -163,21 +185,25 @@ function parseStock(d) {
   for (let i = 1; i < d.length; i++) {
     const r = d[i];
     const it = { date: g(r, c.date), store: key(g(r, c.store)), sname: g(r, c.sname), pcode: g(r, c.pcode), name: g(r, c.name),
-      bc: g(r, c.bc), cat: g(r, c.cat), sub: g(r, c.sub), price: num(g(r, c.price)), qty: num(g(r, c.qty)) };
-    if (!it.pcode && !it.bc) continue;
+      bc: g(r, c.bc), cat: g(r, c.cat), sub: g(r, c.sub), price: num(g(r, c.price)), tot: num(g(r, hi(h, /^total\s*stock/i, /qty|stock/i))), av: num(g(r, hi(h, /^avail/i, /^total\s*stock/i))) };
+    if (!it.bc && !it.pcode) continue;
     items.push(it);
     if (!stores.has(it.store)) stores.set(it.store, it.sname);
     if (it.bc) global.set(key(it.bc), it);
-    if (it.pcode) global.set(key(it.pcode), it);
   }
   return { items, stores, global };
 }
-
-function parseAudit(d) {
+function parseScan(d) {
   const h = d[0] || [];
-  const s = hi(h, /store/i);
-  let c = h.findIndex((x, i) => i !== s && /code|barcode|ean|sku/i.test(txt(x))); if (c < 0) c = 0;
-  return { d, c, s, q: hi(h, /qty|quantity/i), n: hi(h, /note|remark|comment|damage/i) };
+  let c = hi(h, /loc|barcode|code/i); if (c < 0) c = 0;
+  let q = hi(h, /qty|quantity/i); if (q < 0) q = c === 0 ? 1 : 0;
+  return { d, c, q, n: hi(h, /note|remark|comment|damage/i) };
+}
+function parseGC(d) {
+  const h = d[0] || [];
+  let c = hi(h, /loc/i); if (c < 0) c = 0;
+  let q = hi(h, /count|gc|qty/i); if (q < 0) q = c === 0 ? 1 : 0;
+  return { d, c, q };
 }
 
 function fillStores() {
@@ -189,109 +215,232 @@ function fillStores() {
 }
 
 function compute() {
+  // ---- stock for the selected store, keyed by barcode ----
   let its = S.items.filter(i => i.store === store);
   const ds = its.map(i => Date.parse(i.date));
-  if (ds.length && ds.every(x => !isNaN(x))) { // if several dates exist, use only the latest stock date
+  if (ds.length && ds.every(x => !isNaN(x))) { // several dates in the sheet: use only the latest
     const mx = ds.reduce((a, b) => Math.max(a, b), 0);
     its = its.filter((_, j) => ds[j] === mx);
   }
-  const list = [], byPC = new Map(), byBC = new Map();
+  const list = [], byBC = new Map(), sn = S.stores.get(store) || "";
   its.forEach(i => {
-    const k = key(i.pcode) || key(i.bc);
-    let o = byPC.get(k);
+    const k = key(i.bc) || "PC:" + key(i.pcode);
+    let o = byBC.get(k);
     if (!o) {
-      o = { store, sname: i.sname, bc: i.bc, pcode: i.pcode, name: i.name, cat: i.cat, sub: i.sub, price: i.price,
-        stock: 0, counted: 0, notes: [], listed: true, scanned: false, last: -1 };
-      byPC.set(k, o); list.push(o);
-    }
-    o.stock += i.qty;
-  });
-  const sn = S.stores.get(store) || "";
-  A.d.forEach((r, idx) => {
-    if (idx === 0) return;
-    const k = key(r[A.c]); if (!k) return;
-    if (A.s >= 0 && key(r[A.s]) && key(r[A.s]) !== store) return; // optional Store Code column in scan sheet
-    let o = byBC.get(k) || byPC.get(k);
-    if (!o) {
-      const g = S.global.get(k) || {};
-      o = { store, sname: sn, bc: g.bc || "", pcode: txt(r[A.c]), name: g.name || "", cat: g.cat || "", sub: g.sub || "",
-        price: g.price || 0, stock: 0, counted: 0, notes: [], listed: false, scanned: false, last: -1 };
+      o = { id: k, store, sname: i.sname, bc: i.bc, pcode: i.pcode, name: i.name, cat: i.cat, sub: i.sub, price: i.price,
+        stock: 0, counted: 0, notes: [], locs: new Set(), listed: true, scanned: false, last: -1 };
       byBC.set(k, o); list.push(o);
     }
-    o.counted += (A.q >= 0 && txt(r[A.q]) !== "") ? num(r[A.q]) : 1; // blank qty = 1 piece
-    o.scanned = true; o.last = idx;
+    o.stock += basis === "total" ? i.tot : i.av;
+  });
+  // ---- scan sheet: a location row, then the barcodes counted at that location ----
+  const lmap = new Map();
+  const getLoc = name => {
+    let L = lmap.get(name);
+    if (!L) { L = { loc: name, gc: null, scanned: 0, codes: new Set(), inScan: false }; lmap.set(name, L); }
+    return L;
+  };
+  let cur = NO_LOC;
+  A.d.forEach((r, idx) => {
+    if (idx === 0) return;
+    const v = txt(r[A.c]); if (!v) return;
+    const qv = txt(r[A.q]);
+    if (v.includes(".") || (qv === "" && !/^\d{8,}$/.test(v))) { cur = v; getLoc(cur).inScan = true; return; } // location row
+    const k = key(v), qty = qv === "" ? 1 : num(qv);
+    let o = byBC.get(k);
+    if (!o) {
+      const g = S.global.get(k) || {};
+      o = { id: k, store, sname: sn, bc: v, pcode: g.pcode || "", name: g.name || "", cat: g.cat || "", sub: g.sub || "",
+        price: g.price || 0, stock: 0, counted: 0, notes: [], locs: new Set(), listed: false, scanned: false, last: -1 };
+      byBC.set(k, o); list.push(o);
+    }
+    o.counted += qty; o.scanned = true; o.last = idx; o.locs.add(cur);
     const note = A.n >= 0 ? txt(r[A.n]) : "";
     if (note && !o.notes.includes(note)) o.notes.push(note);
+    const L = getLoc(cur); L.scanned += qty; L.codes.add(k); L.inScan = true;
+  });
+  // ---- GC sheet: location-wise count by the second person ----
+  G.d.forEach((r, idx) => {
+    if (idx === 0) return;
+    const v = txt(r[G.c]); if (!v) return;
+    const L = getLoc(v); L.gc = (L.gc || 0) + num(r[G.q]);
   });
   list.forEach(o => {
     const d = o.counted - o.stock;
     o.diff = d; o.extra = d > 0 ? d : 0; o.short = d < 0 ? d : 0; o.val = d * o.price;
-    o.id = key(o.pcode) || key(o.bc);
     o.status = !o.listed ? "unlisted" : !o.scanned ? "pending" : d === 0 ? "match" : d < 0 ? "short" : "extra";
   });
-  rows = list.sort((a, b) => b.last - a.last); // latest scan on top, uncounted products below
-  const now = new Map(rows.map(r => [r.id, r.counted + "|" + r.notes.join(";")]));
+  rows = list.sort((a, b) => b.last - a.last); // latest scan on top
+  locs = [...lmap.values()];
+  locs.forEach(L => {
+    L.diff = L.scanned - (L.gc || 0);
+    L.status = L.gc === null ? "lnogc" : !L.inScan ? "lpending" : L.diff === 0 ? "lmatch" : L.diff < 0 ? "lshort" : "lextra";
+  });
+  const now = new Map([...rows.map(r => ["P:" + r.id, r.counted + "|" + r.notes.join(";")]),
+    ...locs.map(L => ["L:" + L.loc, L.scanned + "|" + L.gc])]);
   changed = new Set();
   if (prev) now.forEach((v, k) => { if (prev.get(k) !== v) changed.add(k); });
   prev = now;
 }
 
-const LABEL = { match: "Matched", short: "Short", extra: "Extra", pending: "Not counted", unlisted: "Not in stock list" };
+const LABEL = { match: "Matched", short: "Short", extra: "Extra", pending: "Not counted", unlisted: "Not in stock list",
+  lmatch: "Matched", lshort: "Scan short", lextra: "Scan extra", lpending: "Not scanned", lnogc: "No GC count" };
+const TAG = { lmatch: "match", lshort: "short", lextra: "extra", lpending: "pending", lnogc: "unlisted" };
+const tag = s => `<span class="tag t-${TAG[s] || s}">${LABEL[s]}</span>`;
+const FILTERS = {
+  prod: ["all", "short", "extra", "match", "pending", "unlisted", "noted"],
+  loc: ["all", "lshort", "lextra", "lmatch", "lpending", "lnogc"]
+};
+const FLABEL = Object.assign({}, LABEL, { all: "All", noted: "With notes" });
+const sgn = n => n > 0 ? "+" + n : String(n);
+
+function setCards(list) {
+  $("cards").innerHTML = list.map(([n, l, c]) => `<div class="card"><div class="n" style="color:${c || "inherit"}">${n}</div><div class="l">${l}</div></div>`).join("");
+}
+
+/* ---------- Audit summary report ---------- */
+const F = id => $(id).value.trim();
+const nIN = n => Math.round(n).toLocaleString("en-IN");
+const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+const dLong = v => { if (!v) return ""; const [y, m, d] = v.split("-"); return d + "-" + MONTHS[+m - 1] + "-" + y; };
+const dShort = v => { if (!v) return ""; const [y, m, d] = v.split("-"); return d + "/" + m + "/" + y; };
+function period(a, b) {
+  if (!a || !b) return "";
+  const x = new Date(a), y = new Date(b);
+  let m = (y.getFullYear() - x.getFullYear()) * 12 + y.getMonth() - x.getMonth(), d = y.getDate() - x.getDate();
+  if (d < 0) { m--; d += new Date(y.getFullYear(), y.getMonth(), 0).getDate(); }
+  return m < 0 ? "" : String(m).padStart(2, "0") + " Months " + d + " Days";
+}
+function sumText() {
+  const sname = S ? (S.stores.get(store) || "") : "";
+  const net = rows.reduce((a, r) => a + r.val, 0), qty = rows.reduce((a, r) => a + r.diff, 0);
+  const neg = rows.reduce((a, r) => a + (r.val < 0 ? r.val : 0), 0);
+  const stockQ = rows.reduce((a, r) => a + r.stock, 0), absd = rows.reduce((a, r) => a + Math.abs(r.diff), 0);
+  const sales = num(F("fSales")), cost = num(F("fCost"));
+  const pct = (a, b) => b ? (a / b * 100).toFixed(1) + "%" : "";
+  const acc = stockQ ? Math.max(0, (1 - absd / stockQ) * 100).toFixed(0) + "%" : "";
+  const v = id => F(id) ? nIN(num(F(id))) : "";
+  return [
+    "*Inventory Audit Report " + sname + (F("fCity") ? " " + F("fCity") : "") + "*", "",
+    "Date : " + dLong(F("fDate")),
+    "City: " + F("fCity"), "",
+    "Store name: " + sname, "",
+    "Store code: " + store, "",
+    "Stock compared with: " + (basis === "total" ? "Total Stock" : "Available Stock"), "",
+    "Sales Amount during the period: *" + v("fSales") + "*", "",
+    "Total inventory Loss Amount - inventory Negative Amount + Positive", "",
+    "Inventory Loss MRP value :  *" + nIN(net) + "*", "",
+    "Inventory MRP loss rate:  *" + pct(net, sales) + "*", "",
+    "Inventory Loss Amount Cost value: *" + v("fCost") + "*", "",
+    "Inventory MRP Cost rate:  *" + pct(cost, sales) + "*", "",
+    "Inventory loss Qty:  *" + nIN(qty) + "*", "",
+    "Negative Inventory adjustment amount: *" + nIN(neg) + "*", "",
+    "Inventory Accurate Rate: *" + acc + "*", "",
+    "Last inventory date- " + dShort(F("fLast")), "",
+    "Current inventory date- " + dShort(F("fCur")), "",
+    "Inventory Time period- " + period(F("fLast"), F("fCur")), "",
+    "*Damage & Tester Reports Last Audit*",
+    "*Damage QTY- " + v("fDmgQ") + "*",
+    "*Damage Value- " + v("fDmgV") + "*", "",
+    "*Tester QTY- " + v("fTstQ") + "*",
+    "*Tester Value- " + v("fTstV") + "*", "", "",
+    "Inventory Count personnel:- " + F("fCount"), "",
+    "Store incharge person- " + F("fInch"), "",
+    "Inventory Audit Persons- " + F("fAud")
+  ].join("\n");
+}
+function renderSum() { $("sumOut").value = sumText(); }
+$("fDate").value = $("fCur").value = new Date().toLocaleDateString("en-CA");
+$("sumPanel").oninput = renderSum;
+$("btnCopy").onclick = async () => {
+  const t = $("sumOut");
+  try { await navigator.clipboard.writeText(t.value); }
+  catch (e) { t.select(); document.execCommand("copy"); }
+  $("btnCopy").textContent = "Copied";
+  setTimeout(() => $("btnCopy").textContent = "Copy report text", 1500);
+};
 
 function render() {
+  const sm = view === "sum";
+  $("sumPanel").classList.toggle("hide", !sm);
+  [$("cards"), document.querySelector(".tools"), document.querySelector(".wrap")].forEach(x => x.classList.toggle("hide", sm));
+  if (sm) { renderSum(); return; }
+  $("tabs").innerHTML = FILTERS[view].map(f => `<button data-f="${f}" class="${f === filter ? "on" : ""}">${FLABEL[f]}</button>`).join("");
+  $("table").className = view === "prod" ? "wide" : "";
   const q = key($("search").value);
-  const view = rows.filter(r =>
-    (filter === "all" || (filter === "noted" ? r.notes.length : r.status === filter)) &&
-    (!q || key(r.bc).includes(q) || key(r.pcode).includes(q) || key(r.name).includes(q)));
-  $("tbody").innerHTML = view.slice(0, MAX_ROWS).map(r => `<tr class="${changed.has(r.id) ? "flash" : ""}">
-    <td><strong>${esc(r.bc) || "—"}</strong></td><td>${esc(r.pcode) || "—"}</td><td class="name">${esc(r.name) || "—"}</td><td>${esc(r.cat)}</td>
-    <td class="num">${r.price || ""}</td><td class="num">${r.stock}</td><td class="num">${r.counted}</td>
-    <td class="num ${r.extra ? "pos" : ""}">${r.extra ? "+" + r.extra : "0"}</td>
-    <td class="num ${r.short ? "neg" : ""}">${r.short || "0"}</td>
-    <td class="num ${r.val > 0 ? "pos" : r.val < 0 ? "neg" : ""}">${r.val ? (r.val > 0 ? "+" : "−") + inr(Math.abs(r.val)) : "0"}</td>
-    <td><span class="tag t-${r.status}">${LABEL[r.status]}</span></td>
-    <td class="note">${esc(r.notes.join("; "))}</td></tr>`).join("");
+  let html, total;
+  if (view === "prod") {
+    $("search").placeholder = "Search barcode, product code or name…";
+    $("thead").innerHTML = `<tr><th>Barcode</th><th>Product code</th><th>Product name</th><th>Category</th>
+      <th class="num">Price</th><th class="num">${basis === "total" ? "Total stock" : "Available stock"}</th><th class="num">Counted qty</th>
+      <th class="num">Extra (+)</th><th class="num">Short (−)</th><th class="num">Diff value</th>
+      <th>Status</th><th>Found at location</th><th>Notes</th></tr>`;
+    const v = rows.filter(r => (filter === "all" || (filter === "noted" ? r.notes.length : r.status === filter)) &&
+      (!q || key(r.bc).includes(q) || key(r.pcode).includes(q) || key(r.name).includes(q)));
+    total = v.length;
+    html = v.slice(0, MAX_ROWS).map(r => `<tr class="${changed.has("P:" + r.id) ? "flash" : ""}">
+      <td><strong>${esc(r.bc) || "—"}</strong></td><td>${esc(r.pcode) || "—"}</td><td class="name">${esc(r.name) || "—"}</td><td>${esc(r.cat)}</td>
+      <td class="num">${r.price || ""}</td><td class="num">${r.stock}</td><td class="num">${r.counted}</td>
+      <td class="num ${r.extra ? "pos" : ""}">${r.extra ? "+" + r.extra : "0"}</td>
+      <td class="num ${r.short ? "neg" : ""}">${r.short || "0"}</td>
+      <td class="num ${r.val > 0 ? "pos" : r.val < 0 ? "neg" : ""}">${r.val ? (r.val > 0 ? "+" : "−") + inr(Math.abs(r.val)) : "0"}</td>
+      <td>${tag(r.status)}</td><td class="note">${esc([...r.locs].join(", "))}</td>
+      <td class="note">${esc(r.notes.join("; "))}</td></tr>`).join("");
+    const cnt = s => rows.filter(r => r.status === s).length, net = rows.reduce((a, r) => a + r.val, 0);
+    setCards([[rows.filter(r => r.listed).length, "Products in store"], [rows.reduce((a, r) => a + r.stock, 0), basis === "total" ? "Total stock" : "Available stock"],
+      [rows.reduce((a, r) => a + r.counted, 0), "Counted qty"], [cnt("match"), "Matched", "var(--ok)"], [cnt("short"), "Short", "var(--short)"],
+      [cnt("extra") + cnt("unlisted"), "Extra", "var(--extra)"], [cnt("pending"), "Not counted yet", "var(--mute)"],
+      [(net < 0 ? "−" : net > 0 ? "+" : "") + inr(Math.abs(net)), "Net difference value", net < 0 ? "var(--short)" : net > 0 ? "var(--extra)" : ""]]);
+  } else {
+    $("search").placeholder = "Search location…";
+    $("thead").innerHTML = `<tr><th>Location</th><th class="num">GC count</th><th class="num">Scanned qty</th>
+      <th class="num">Difference</th><th class="num">Different barcodes</th><th>Status</th></tr>`;
+    const v = locs.filter(L => (filter === "all" || L.status === filter) && (!q || key(L.loc).includes(q)));
+    total = v.length;
+    html = v.slice(0, MAX_ROWS).map(L => `<tr class="${changed.has("L:" + L.loc) ? "flash" : ""}">
+      <td><strong>${esc(L.loc)}</strong></td><td class="num">${L.gc === null ? "—" : L.gc}</td><td class="num">${L.scanned}</td>
+      <td class="num ${L.gc === null ? "" : L.diff > 0 ? "pos" : L.diff < 0 ? "neg" : ""}">${L.gc === null ? "—" : sgn(L.diff)}</td>
+      <td class="num">${L.codes.size}</td><td>${tag(L.status)}</td></tr>`).join("");
+    const cnt = s => locs.filter(L => L.status === s).length;
+    setCards([[locs.length, "Locations"], [locs.reduce((a, L) => a + (L.gc || 0), 0), "GC count total"],
+      [locs.reduce((a, L) => a + L.scanned, 0), "Scanned qty total"], [cnt("lmatch"), "Matched", "var(--ok)"],
+      [cnt("lshort"), "Scan short", "var(--short)"], [cnt("lextra"), "Scan extra", "var(--extra)"],
+      [cnt("lpending"), "Not scanned yet", "var(--mute)"], [cnt("lnogc"), "No GC count", "var(--un)"]]);
+  }
+  $("tbody").innerHTML = html;
   const e = $("empty");
-  e.classList.toggle("hide", view.length > 0 && view.length <= MAX_ROWS);
-  e.textContent = !view.length ? "No products match this view."
-    : `Showing the first ${MAX_ROWS} of ${view.length} products. Use search or the filters to narrow down. The Excel download always contains everything.`;
-  const cnt = s => rows.filter(r => r.status === s).length;
-  const net = rows.reduce((a, r) => a + r.val, 0);
-  $("cTotal").textContent = rows.filter(r => r.listed).length;
-  $("cStock").textContent = rows.reduce((a, r) => a + r.stock, 0);
-  $("cCount").textContent = rows.reduce((a, r) => a + r.counted, 0);
-  $("cMatch").textContent = cnt("match"); $("cShort").textContent = cnt("short");
-  $("cExtra").textContent = cnt("extra") + cnt("unlisted"); $("cPend").textContent = cnt("pending");
-  $("cVal").textContent = (net < 0 ? "−" : net > 0 ? "+" : "") + inr(Math.abs(net));
-  $("cVal").style.color = net < 0 ? "var(--short)" : net > 0 ? "var(--extra)" : "";
+  e.classList.toggle("hide", total > 0 && total <= MAX_ROWS);
+  e.textContent = !total ? "Nothing matches this view."
+    : `Showing the first ${MAX_ROWS} of ${total} rows. Use search or the filters to narrow down. The Excel download always contains everything.`;
 }
 
 function demo() {
   const H = "Date,Store Code,Store Name,Product Code,Product Name,Barcode,Category Name,Sub-Class Name,Price,Total Stock,Available Stock,Stock AMT\n";
   const st = H + [
-    "2026-09-27,INJ7,Surat Adajan,2019889910100,Miniso Bowknot Queen Eyeshadow,4894916013881,Cosmetics,Eyeshadow Liquid,300,8,8,2400",
+    "2026-09-27,INJ7,Surat Adajan,2019889910100,Miniso Bowknot Queen Eyeshadow,4894916013881,Cosmetics,Eyeshadow Liquid,300,3,3,900",
     "2026-09-27,INJ7,Surat Adajan,2028704210103,Basic Series Pencil Sharpener,6942554576461,Stationery & Gift,Stationery,60,3,3,180",
-    "2026-09-27,INJ7,Surat Adajan,2035578210108,Miniso Scarf Bunny Plush Toy 35CM,4894916070006,Plush Toy,Regular Plush,500,6,0,3000",
-    "2026-09-27,INJ7,Surat Adajan,2024480713128,Miniso Women's Fashion Clog,4894916047374,Apparel & Accessories,Fashionable Slippers,560,4,4,2240",
-    "2026-09-27,INI8,BHOPAL,2021143211106,Miniso Friction Plane (Blue),4894916014697,Toy Series,Plastic Vehicles,210,6,0,1260",
-    "2026-09-27,INI8,BHOPAL,2033103210104,The Powerpuff Girls Keychains,6942764406855,Plush Toy,Fashionable Keychains,550,3,3,1650"].join("\n");
-  const scans = ["2019889910100,8,", "2028704210103,1,", "2035578210108,1,", "2028704210103,1,", "2035578210108,1,",
-    "2024480713128,5,1 pc damaged", "2021143211106,6,", "2099999999999,1,Not on stock list", "2033103210104,2,"];
-  return [st, "Product Code,Scan Qty,Note\n" + scans.slice(0, 2 + (demoTick++ % (scans.length - 1))).join("\n")];
+    "2026-09-27,INJ7,Surat Adajan,2035578210108,Miniso Scarf Bunny Plush Toy 35CM,4894916070006,Plush Toy,Regular Plush,500,2,0,1000",
+    "2026-09-27,INJ7,Surat Adajan,2024480713128,Miniso Women's Fashion Clog,4894916047374,Apparel & Accessories,Fashionable Slippers,560,1,1,560",
+    "2026-09-27,INI8,BHOPAL,2021143211106,Miniso Friction Plane (Blue),4894916014697,Toy Series,Plastic Vehicles,210,6,0,1260"].join("\n");
+  const scans = ["10.001,", "4894916013881,1", "6942554576461,1", "4894916013881,1", "6942554576461,1", "4894916013881,1",
+    "10.002,", "4894916070006,1", "6942554576461,1", "4894916047374,1", "4894916047374,1", "6931798862232,1"];
+  return [st, "Location,QTY\n" + scans.slice(0, 3 + (demoTick++ % (scans.length - 2))).join("\n"), "Location,GC count\n10.001,5\n10.002,6\n10.003,4"];
 }
 
 async function refresh() {
   if (busy) return; busy = true;
   try {
-    const isDemo = !CONFIG.STOCK_SHEET_URL.trim() || !CONFIG.AUDIT_SHEET_URL.trim();
-    let st = stockText, au;
+    const isDemo = !CONFIG.STOCK_SHEET_URL.trim() || !CONFIG.SCAN_SHEET_URL.trim();
     const needStock = !S || Date.now() - lastStockAt > CONFIG.STOCK_REFRESH_SECONDS * 1000;
-    if (isDemo) [st, au] = demo();
-    else [st, au] = await Promise.all([needStock ? fetchText(CONFIG.STOCK_SHEET_URL) : stockText, fetchText(CONFIG.AUDIT_SHEET_URL)]);
+    let st, sc, gc;
+    if (isDemo) [st, sc, gc] = demo();
+    else [st, sc, gc] = await Promise.all([needStock ? fetchText(CONFIG.STOCK_SHEET_URL) : stockText, fetchText(CONFIG.SCAN_SHEET_URL),
+      CONFIG.GC_SHEET_URL.trim() ? fetchText(CONFIG.GC_SHEET_URL) : ""]);
     if (needStock) lastStockAt = Date.now();
     let dirty = false;
     if (st !== stockText) { stockText = st; S = parseStock(parse(st)); fillStores(); dirty = true; }
-    if (au !== auditText) { auditText = au; A = parseAudit(parse(au)); dirty = true; }
+    if (sc !== scanText) { scanText = sc; A = parseScan(parse(sc)); dirty = true; }
+    if (gc !== gcText) { gcText = gc; G = parseGC(parse(gc)); dirty = true; }
     if (dirty) { compute(); render(); }
     $("dot").classList.remove("err");
     $("status").textContent = (isDemo ? "Demo data" : "Live") + " · checked " + new Date().toLocaleTimeString();
@@ -305,34 +454,60 @@ async function refresh() {
 }
 
 function downloadExcel() {
-  const head = ["Store Code", "Store Name", "Barcode", "Product Code", "Product Name", "Category", "Sub-Class", "Price",
-    "Stock Qty", "Counted Qty", "Extra (+)", "Short (-)", "Difference", "Difference Value", "Status", "Notes"];
-  const data = rows.map(r => [r.store, r.sname, r.bc, r.pcode, r.name, r.cat, r.sub, r.price, r.stock, r.counted,
-    r.extra, r.short, r.diff, r.val, LABEL[r.status], r.notes.join("; ")]);
-  const ws = XLSX.utils.aoa_to_sheet([head, ...data]);
-  ws["!cols"] = [10, 18, 16, 16, 44, 20, 22, 8, 10, 12, 10, 10, 11, 15, 18, 36].map(w => ({ wch: w }));
-  const cnt = s => rows.filter(r => r.status === s).length;
+  if (!S) return;
+  const p = [["Store Code", "Store Name", "Barcode", "Product Code", "Product Name", "Category", "Sub-Class", "Price",
+    (basis === "total" ? "Total Stock" : "Available Stock"), "Counted Qty", "Extra (+)", "Short (-)", "Difference", "Difference Value", "Status", "Found At Location", "Notes"],
+    ...rows.map(r => [r.store, r.sname, r.bc, r.pcode, r.name, r.cat, r.sub, r.price, r.stock, r.counted,
+      r.extra, r.short, r.diff, r.val, LABEL[r.status], [...r.locs].join(", "), r.notes.join("; ")])];
+  const ws = XLSX.utils.aoa_to_sheet(p);
+  ws["!cols"] = [10, 18, 16, 16, 44, 20, 22, 8, 10, 12, 10, 10, 11, 15, 18, 22, 30].map(w => ({ wch: w }));
+  const l = [["Location", "GC Count", "Scanned Qty", "Difference (Scanned - GC)", "Different Barcodes", "Status"],
+    ...locs.map(L => [L.loc, L.gc === null ? "" : L.gc, L.scanned, L.gc === null ? "" : L.diff, L.codes.size, LABEL[L.status]])];
+  const wl = XLSX.utils.aoa_to_sheet(l);
+  wl["!cols"] = [16, 10, 12, 24, 18, 16].map(w => ({ wch: w }));
+  const cnt = s => rows.filter(r => r.status === s).length, lc = s => locs.filter(L => L.status === s).length;
   const sum = XLSX.utils.aoa_to_sheet([
     ["Stock Audit Summary"], ["Store", store + " " + (S.stores.get(store) || "")], ["Generated", new Date().toLocaleString()], [],
-    ["Products in store", rows.filter(r => r.listed).length], ["Total stock qty", rows.reduce((a, r) => a + r.stock, 0)],
-    ["Total counted qty", rows.reduce((a, r) => a + r.counted, 0)],
-    ["Matched", cnt("match")], ["Short", cnt("short")], ["Extra", cnt("extra")],
-    ["Not counted", cnt("pending")], ["Not in stock list", cnt("unlisted")],
-    ["Net difference value", rows.reduce((a, r) => a + r.val, 0)]]);
+    ["PRODUCT-WISE"], ["Products in store", rows.filter(r => r.listed).length], ["Compared with", basis === "total" ? "Total Stock" : "Available Stock"], [(basis === "total" ? "Total Stock" : "Available Stock") + " qty", rows.reduce((a, r) => a + r.stock, 0)],
+    ["Total counted qty", rows.reduce((a, r) => a + r.counted, 0)], ["Matched", cnt("match")], ["Short", cnt("short")], ["Extra", cnt("extra")],
+    ["Not counted", cnt("pending")], ["Not in stock list", cnt("unlisted")], ["Net difference value", rows.reduce((a, r) => a + r.val, 0)], [],
+    ["LOCATION-WISE"], ["Locations", locs.length], ["GC count total", locs.reduce((a, L) => a + (L.gc || 0), 0)],
+    ["Scanned qty total", locs.reduce((a, L) => a + L.scanned, 0)], ["Matched", lc("lmatch")], ["Scan short", lc("lshort")],
+    ["Scan extra", lc("lextra")], ["Not scanned", lc("lpending")], ["No GC count", lc("lnogc")]]);
   sum["!cols"] = [{ wch: 22 }, { wch: 28 }];
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "Audit Report");
+  XLSX.utils.book_append_sheet(wb, ws, "Product Report");
+  XLSX.utils.book_append_sheet(wb, wl, "Location Report");
   XLSX.utils.book_append_sheet(wb, sum, "Summary");
+  const wa = XLSX.utils.aoa_to_sheet(sumText().split("\n").map(l => [l.replace(/\*/g, "")]));
+  wa["!cols"] = [{ wch: 70 }];
+  XLSX.utils.book_append_sheet(wb, wa, "Audit Report");
   XLSX.writeFile(wb, "stock-audit-" + (store || "store") + "-" + new Date().toISOString().slice(0, 10) + ".xlsx");
 }
 
 $("btnXls").onclick = downloadExcel;
-$("store").onchange = e => { store = e.target.value; prev = null; if (S && A) { compute(); render(); } };
+let basis = "available"; // default comparison: Available Stock
+const paintBasis = () => document.querySelectorAll("#basis button").forEach(b => {
+  const on = b.dataset.b === basis;
+  b.style.background = on ? "var(--accent)" : "#fff"; b.style.color = on ? "#fff" : "var(--ink)";
+  b.style.borderColor = on ? "var(--accent)" : "var(--line)"; b.setAttribute("aria-pressed", on);
+});
+$("basis").onclick = e => {
+  const b = e.target.closest("button"); if (!b) return;
+  basis = b.dataset.b; paintBasis(); prev = null;
+  if (S && A && G) { compute(); render(); }
+};
+paintBasis();
+$("store").onchange = e => { store = e.target.value; prev = null; if (S && A && G) { compute(); render(); } };
 $("search").oninput = () => { changed = new Set(); render(); };
 $("tabs").onclick = e => {
   const b = e.target.closest("button"); if (!b) return;
-  filter = b.dataset.f; changed = new Set();
-  document.querySelectorAll("#tabs button").forEach(x => x.classList.toggle("on", x === b));
+  filter = b.dataset.f; changed = new Set(); render();
+};
+$("views").onclick = e => {
+  const b = e.target.closest("button"); if (!b) return;
+  view = b.dataset.v; filter = "all"; changed = new Set(); $("search").value = "";
+  document.querySelectorAll("#views button").forEach(x => x.classList.toggle("on", x === b));
   render();
 };
 refresh();
